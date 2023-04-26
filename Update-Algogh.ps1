@@ -1,3 +1,40 @@
+
+<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 5afb41c5-4043-48cb-9965-402a5c13ec5d
+
+.AUTHOR Jakob Gillinger
+
+.COMPANYNAME Cegeka GmbH
+
+.COPYRIGHT Cegeka GmbH
+
+.TAGS
+
+.LICENSEURI
+
+.PROJECTURI https://github.com/cegekaJG/Algogh-Manager
+
+.ICONURI
+
+.EXTERNALMODULEDEPENDENCIES GitHub.cli
+
+.REQUIREDSCRIPTS
+
+.EXTERNALSCRIPTDEPENDENCIES
+
+.RELEASENOTES
+
+
+#>
+
+<#
+
+.DESCRIPTION
+A straightforward script that recursively updates all .app-packages defined in the AL-GO settings file.
+#>
 Param(
     [string] $Path = $PWD.Path,
     [string] $Project = ".",
