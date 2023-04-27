@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.3
+.VERSION 1.4
 
 .GUID 5afb41c5-4043-48cb-9965-402a5c13ec5d
 
@@ -44,7 +44,7 @@ Param(
 )
 
 if ($help -or $h) {
-    Write-Host("Version 1.3. Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
+    Write-Host("Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
     Write-Host("Options")
     Write-Host("  -Path <directory>              The path to the root directory of the repository, or the app directory containing the app.json manifest. Defaults to the current working directory.")
     Write-Host("  -DependenciesFolder <relative> The path to the location of the dependency apps, relative to the app folder. Defaults to '.alpackages'.")
