@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.1
+.VERSION 1.3
 
 .GUID 5afb41c5-4043-48cb-9965-402a5c13ec5d
 
@@ -26,7 +26,8 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-
+1.3) Fixed issue in which the script wouldn't search recursively
+     Included repository name of base repository
 
 #>
 
@@ -43,7 +44,7 @@ Param(
 )
 
 if ($help -or $h) {
-    Write-Host("Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
+    Write-Host("Version 1.3. Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
     Write-Host("Options")
     Write-Host("  -Path <directory>              The path to the root directory of the repository, or the app directory containing the app.json manifest. Defaults to the current working directory.")
     Write-Host("  -DependenciesFolder <relative> The path to the location of the dependency apps, relative to the app folder. Defaults to '.alpackages'.")
@@ -52,10 +53,44 @@ if ($help -or $h) {
 
 $ErrorActionPreference = "stop"
 Set-StrictMode -Version 2.0
+if (Test-Path $path -ErrorAction Stop) {}   # Test if the given path is valid
 
 $ALGoFolderName = '.AL-Go'
 $ALGoSettingsFile = "$ALGoFolderName/settings.json"
 $RepoSettingsFile = '.github/AL-Go-Settings.json'
+
+function Get-RepoNameOfDirectory {
+    Param(
+        [parameter(position = 0)]
+        [string] $Path = $PWD
+    )
+
+    $fullName = $null
+    $pop = $false
+    if ($Path -ne $PWD) {
+        Push-Location
+        Set-Location
+        $pop = $true
+    }
+
+    try {
+        $remoteUrl = & git remote get-url origin
+        $remoteUrlSplit = $remoteUrl -split '/'
+        $organization = $remoteUrlSplit[-2]
+        $repoName = $remoteUrlSplit[-1]
+        $lastIndex = $repoName.LastIndexOf('.git')
+        if ($lastIndex -ge 0) {
+            $repoName = $repoName.Substring(0, $lastIndex)
+        }
+        $fullName = "$organization/$repoName"
+    }
+    catch {}
+
+    if ($pop) {
+        Pop-Location
+    }
+    return $fullName
+}
 
 function Join-Uri($rootPath, $relativePath){
     if (-not ($rootPath.StartsWith("http://") -or $rootPath.StartsWith("https://"))) {
@@ -620,7 +655,6 @@ function Get-Dependencies {
     }
 
     $downloadedList = @()
-    Write-Host "${repository}: Locating all artifacts from probing paths."
     $probingPathsJson | ForEach-Object {
         $dependency = $_
         $projects = $dependency.projects
@@ -780,7 +814,7 @@ function Complete-DependencyPaths {
         $settings.appDependencyProbingPaths | ForEach-Object {
             $dependency = $_
             if (-not ($dependency.PsObject.Properties.name -eq "repo")) {
-                throw "${repository}: AppDependencyProbingPaths needs to contain a repo property, pointing to the repository on which you have a dependency"
+                throw "${repository}: appDependencyProbingPaths needs to contain a repo property, pointing to the repository on which you have a dependency"
             }
             if ($dependency.Repo -eq ".") {
                 $dependency.Repo = "$server_url/$repository"
@@ -823,9 +857,11 @@ function Complete-DependencyPaths {
 
 function Get-AppsOfDependencies {
     Param(
-        [hashtable]$probingPathsJson,
+        $probingPathsJson,
         [string]$dependenciesFolder
     )
+
+    $downloaded = @()
 
     $probingPathsJson | ForEach-Object {
         $dependency = $_
@@ -833,8 +869,9 @@ function Get-AppsOfDependencies {
         $repository = ([uri]$dependency.repo).AbsolutePath.Replace(".git", "").TrimStart("/")
 
         # Recursively get dependencies of the repository
-        Get-AppsOfRepo -repository $repository -project $projects -dependenciesFolder $dependenciesFolder -token $dependency.authTokenSecret
+        $downloaded += Get-AppsOfRepo -repository $repository -project $projects -dependenciesFolder $dependenciesFolder -token $dependency.authTokenSecret
     }
+    $downloaded
 }
 
 function Get-AppsOfRepo {
@@ -878,6 +915,8 @@ function Get-AppsOfRepo {
         "doNotRunBcptTests" = $true
     }
 
+    $downloaded = @()
+
     if ($settings.appDependencyProbingPaths) {
         if (-not (Test-Path $dependenciesFolder)) {
             New-Item $dependenciesFolder -ItemType Directory | Out-Null
@@ -892,9 +931,11 @@ function Get-AppsOfRepo {
             }
         })
 
-
-        Get-Dependencies -probingPathsJson $settings.appDependencyProbingPaths -dependenciesFolder $dependenciesFolder
+        Write-Host "${repository}: Locating all artifacts from probing paths."
+        $downloaded += Get-AppsOfDependencies -probingPathsJson $settings.appDependencyProbingPaths -dependenciesFolder $dependenciesFolder
+        $downloaded += Get-Dependencies -probingPathsJson $settings.appDependencyProbingPaths -dependenciesFolder $dependenciesFolder
     }
+    $downloaded
 }
 
 function Get-AppFolder {
@@ -926,6 +967,7 @@ function Get-AppFolder {
 }
 
 $Project = "."
+$repoName = Get-RepoNameOfDirectory $Path
 
 if (Test-Path (Join-Path $Path 'app.json')) {
     $projectFolder = $Path
@@ -936,9 +978,24 @@ if (Test-Path (Join-Path $Path 'app.json')) {
 
 $dependenciesFolder = Join-Path $projectFolder $dependenciesFolder
 $userName = Start-GitHubSession
-$downloaded = Get-AppsOfRepo -baseFolder $Path -project $Project -dependenciesFolder $dependenciesFolder
+
+$params = @{
+    'baseFolder' = $Path
+    'dependenciesFolder' = $dependenciesFolder
+}
+
+if (![string]::IsNullOrEmpty($Project)) {
+    $params += @{ 'project' = $Project}
+}
+if (![string]::IsNullOrEmpty($repoName)) {
+    $params += @{ 'repository' = $repoName}
+}
+
+$downloaded = Get-AppsOfRepo @params
 
 if ($null -ne $downloaded) {
     Write-Host "Downloaded the following dependencies:"
     $downloaded
+} else {
+    Write-Host "No new artifacts to download."
 }
