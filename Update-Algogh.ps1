@@ -33,13 +33,22 @@
 <#
 
 .DESCRIPTION
-A straightforward script that recursively updates all .app-packages defined in the AL-GO settings file.
+A straightforward script that recursively updates all .app-packages defined in the AL-GO settings file. Created by modifying AL-GO for GitHub's 'ALGoHelper.ps1' and 'GitHubHelper.ps1' found @ https://github.com/microsoft/AL-Go
 #>
 Param(
     [string] $Path = $PWD.Path,
-    [string] $Project = ".",
-    $dependenciesFolder = ".alpackages"
+    [string] $dependenciesFolder = ".alpackages",
+    [switch] $help,
+    [switch] $h
 )
+
+if ($help -or $h) {
+    Write-Host("Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
+    Write-Host("Options")
+    Write-Host("  -Path <directory>              The path to the root directory of the repository. Defaults to the current working directory.")
+    Write-Host("  -DependenciesFolder <relative> The path to the location of the dependency apps, relative to the app folder. Defaults to '.alpackages'.")
+    exit
+}
 
 $ErrorActionPreference = "stop"
 Set-StrictMode -Version 2.0
@@ -916,6 +925,7 @@ function Get-AppFolder {
     throw "No valid app folder found: Could not find app.json file in any subdirectory of $baseFolder"
 }
 
+$Project = "."
 $projectFolder = Get-AppFolder -baseFolder $Path -project $Project
 $dependenciesFolder = Join-Path $projectFolder $dependenciesFolder
 $userName = Start-GitHubSession
