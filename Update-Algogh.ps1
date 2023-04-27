@@ -45,7 +45,7 @@ Param(
 if ($help -or $h) {
     Write-Host("Downloads .app-packages defined in the AL-GO settings file. See https://github.com/cegekaJG/Algogh-Manager for instructions.")
     Write-Host("Options")
-    Write-Host("  -Path <directory>              The path to the root directory of the repository. Defaults to the current working directory.")
+    Write-Host("  -Path <directory>              The path to the root directory of the repository, or the app directory containing the app.json manifest. Defaults to the current working directory.")
     Write-Host("  -DependenciesFolder <relative> The path to the location of the dependency apps, relative to the app folder. Defaults to '.alpackages'.")
     exit
 }
@@ -720,7 +720,7 @@ function DownloadRelease {
                 $list[$name] = $_.created_at
                 ConvertTo-Json $list | Set-Content $listpath
 
-                return $archivename
+                return $name
             }
             catch {
                 Write-Host -ForegroundColor Red "Error trying to retrieve $name."
@@ -732,22 +732,22 @@ function DownloadRelease {
 
 function Start-GitHubSession {
     try {
-        $authStatus = invoke-gh -silent auth status
+        $authStatus = invoke-gh -returnValue -silent auth status
     }
     catch {
         & gh auth login --web
-        $authStatus = invoke-gh -silent auth status
+        $authStatus = invoke-gh -returnValue -silent auth status
     }
-    return $authStatus.SubString($authstatus.IndexOf('Logged in to github.com as ')+27).Trim().Split(' ')[0]
+    $authStatus = $authStatus[1]
+    $index = $authstatus.IndexOf('Logged in to github.com as')+27
+    return $authStatus.SubString($index).Trim().Split(' ')[0]
 }
 
 function Get-GitHubToken {
     $retry = $true
     while ($retry) {
         try {
-            $authstatus = (invoke-gh -silent -returnValue auth status --show-token) -join " "
-            $authTokenSecret = $authStatus.SubString($authstatus.IndexOf('Token: ')+7).Trim().Split(' ')[0]
-            $authTokenSecret = invoke-gh -silent -returnValue auth status token
+            $authTokenSecret = invoke-gh -silent -returnValue auth token
             $retry = $false
         }
         catch {
@@ -926,7 +926,14 @@ function Get-AppFolder {
 }
 
 $Project = "."
-$projectFolder = Get-AppFolder -baseFolder $Path -project $Project
+
+if (Test-Path (Join-Path $Path 'app.json')) {
+    $projectFolder = $Path
+    $Path = (Join-Path $Path '..' -Resolve)
+} else {
+    $projectFolder = Get-AppFolder -baseFolder $Path -project $Project
+}
+
 $dependenciesFolder = Join-Path $projectFolder $dependenciesFolder
 $userName = Start-GitHubSession
 $downloaded = Get-AppsOfRepo -baseFolder $Path -project $Project -dependenciesFolder $dependenciesFolder
